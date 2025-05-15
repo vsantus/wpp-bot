@@ -2,12 +2,15 @@ const { default: makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion,
 const { Boom } = require('@hapi/boom');
 const qrcode = require('qrcode-terminal');
 const path = require('path');
+const { handleMessage } = require('./flow'); // <-- importa o fluxo aqui
+
+let sock;
 
 async function startBot() {
   const { state, saveCreds } = await useMultiFileAuthState(path.resolve(__dirname, './auth'));
   const { version } = await fetchLatestBaileysVersion();
 
-  const sock = makeWASocket({
+  sock = makeWASocket({
     version,
     auth: state,
     printQRInTerminal: true,
@@ -20,30 +23,31 @@ async function startBot() {
     if (qr) qrcode.generate(qr, { small: true });
 
     if (connection === 'close') {
+      const statusCode = lastDisconnect?.error?.output?.statusCode;
       const shouldReconnect =
         lastDisconnect?.error instanceof Boom &&
-        lastDisconnect.error.output?.statusCode !== DisconnectReason.loggedOut;
+        statusCode !== DisconnectReason.loggedOut;
+
       console.log('🔁 Conexão fechada. Reconectar?', shouldReconnect);
-      if (shouldReconnect) startBot();
+
+      if (shouldReconnect) {
+        startBot();
+      } else if (statusCode === DisconnectReason.loggedOut) {
+        console.log('⚠️ Bot foi deslogado. Será necessário escanear o QR Code novamente.');
+      }
     } else if (connection === 'open') {
       console.log('✅ Bot conectado com sucesso!');
     }
   });
 
+  // Chama o handler de mensagens
   sock.ev.on('messages.upsert', async ({ messages }) => {
+    if (!messages || !messages[0]) return;
     const msg = messages[0];
     if (!msg.message || msg.key.fromMe) return;
 
-    const sender = msg.key.remoteJid;
-    const text = msg.message.conversation || msg.message.extendedTextMessage?.text;
-
-    if (text?.toLowerCase().includes('horário')) {
-      await sock.sendMessage(sender, { text: 'Olá! Qual dia e hora você deseja agendar o corte?' });
-    } else if (text?.toLowerCase().includes('terça')) {
-      await sock.sendMessage(sender, { text: 'Beleza! Corte agendado para terça-feira. ✂️' });
-    }
+    await handleMessage(sock, msg);
   });
 }
 
 startBot();
-
