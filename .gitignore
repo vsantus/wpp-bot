@@ -1,5 +1,7 @@
 # autenticação unica por usuario 
-
 /auth
 
-teste
+# firebase key
+bot-wpp-baileys-firebase-adminsdk-fbsvc-30b0f09704.json
+
+google-credentials.json

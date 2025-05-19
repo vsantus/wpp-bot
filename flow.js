@@ -1,3 +1,4 @@
+const { salvarAgendamento } = require('./sheets');
 const estados = {}; // Armazena o estado de cada usuário
 
 async function handleMessage(sock, msg) {
@@ -35,37 +36,72 @@ async function handleMessage(sock, msg) {
         return handleMessage(sock, msg); // Reprocessa a mensagem atual
     }
 
+    const { salvarNomeUsuario, buscarCliente } = require('./firebase');
+
+    if (!estado.nomeVerificado) {
+        const cliente = await buscarCliente(sender);
+        if (!cliente) {
+            estado.etapa = 'solicitar_nome';
+            estado.nomeVerificado = true;
+            await sock.sendMessage(sender, {
+                text: '👋 Olá! Antes de começarmos, qual o seu *nome*?'
+            });
+            return;
+        } else {
+            estado.nome = cliente.nome;
+            estado.nomeVerificado = true;
+        }
+    }
+
+
     switch (etapaAtual) {
+        case 'solicitar_nome':
+            if (entrada.length < 2) {
+                await sock.sendMessage(sender, {
+                    text: '❌ Nome inválido. Digite seu nome completo, por favor.'
+                });
+                return;
+            }
+
+            estado.nome = texto;
+            await salvarNomeUsuario(sender, texto);
+            estado.etapa = 'inicio';
+            await sock.sendMessage(sender, {
+                text: `✅ Obrigado, ${texto}! Agora sim, vamos começar.`
+            });
+            return handleMessage(sock, msg); // reprocessa
+
+
         case 'inicio':
             if (!['1', '2', '3', '4'].includes(entrada)) {
-                await delay(3000);
+                await delay(2000);
                 await sock.sendMessage(sender, {
-                    text: 'Como posso te ajudar?\n1. 🗓️ Realizar agendamento\n2. 💰 Preços\n3. 📍 Endereço\n4. 🔎 Meus agendamentos\n\n↩️ _Digite "Sair" para encerrar o Atendimento._'
+                    text: `Olá ${estado.nome}, Como posso te ajudar?\n1. 🗓️ Realizar agendamento\n2. 💰 Preços\n3. 📍 Endereço\n4. 🔎 Meus agendamentos\n\n↩️ _Digite "Sair" para encerrar o Atendimento._`
                 });
             } else {
                 estado.historico.push('inicio');
                 switch (entrada) {
                     case '1':
                         estado.etapa = 'servico';
-                        await delay(3000);
+                        await delay(2000);
                         await sock.sendMessage(sender, {
                             text: 'Qual serviço você deseja agendar?\n1. Corte\n2. Barba\n3. Sobrancelha\n4. Corte + Barba\n5. Corte + Sobrancelha\n6. Corte + Barba + Sobrancelha\n\n↩️ _Digite "Voltar" para retornar._'
                         });
                         break;
                     case '2':
-                        await delay(3000);
+                        await delay(1000);
                         await sock.sendMessage(sender, {
                             text: '💈 *Preços:*\nCorte: R$30\nBarba: R$20\nSobrancelha: R$15\nCorte + Barba: R$45\nCorte + Sobrancelha: R$40\nCorte + Barba + Sobrancelha: R$60\n\n↩️ _Digite "Voltar" para retornar._'
                         });
                         break;
                     case '3':
-                        await delay(3000);
+                        await delay(1000);
                         await sock.sendMessage(sender, {
                             text: '📍 Nosso endereço é Rua Alamedas, 1234 - Centro\n\n↩️ _Digite "Voltar" para retornar._'
                         });
                         break;
                     case '4':
-                        await delay(3000);
+                        await delay(1000);
                         await sock.sendMessage(sender, {
                             text: '📅 Seus agendamentos são: (exemplo de agendamento aqui)'
                         });
@@ -89,7 +125,7 @@ async function handleMessage(sock, msg) {
                 estado.valorEscolhido = servico.valor;
                 estado.historico.push('servico');
                 estado.etapa = 'horario';
-                await delay(3000);
+                await delay(2000);
                 await sock.sendMessage(sender, {
                     text: `📅 Agora escolha um horário para ${servico.nome}:\n1. Sexta - 13h\n2. Sexta - 15h\n\n↩️ _Digite "Voltar" para retornar._`
                 });
@@ -109,7 +145,7 @@ async function handleMessage(sock, msg) {
                 estado.horarioEscolhido = horarios[entrada];
                 estado.historico.push('horario');
                 estado.etapa = 'pagamento';
-                await delay(3000);
+                await delay(2000);
                 await sock.sendMessage(sender, {
                     text: '🧾 Agora escolha a forma de pagamento:\n1. Pix\n2. Dinheiro\n3. Cartão\n\n↩️ _Digite "Voltar" para retornar._'
                 });
@@ -129,16 +165,36 @@ async function handleMessage(sock, msg) {
             if (pagamentos[entrada]) {
                 estado.pagamentoEscolhido = pagamentos[entrada];
                 estado.etapa = 'finalizado';
-                await delay(3000);
+                await delay(2000);
+
+                try {
+                    await salvarAgendamento({
+                        nome: estado.nome,
+                        telefone: sender,
+                        servico: estado.servicoEscolhido,
+                        valor: estado.valorEscolhido,
+                        horario: estado.horarioEscolhido,
+                        pagamento: estado.pagamentoEscolhido,
+                        data: new Date().toLocaleString()
+                    });
+                } catch (error) {
+                    console.error('Erro ao salvar no Sheets:', error);
+                    await sock.sendMessage(sender, {
+                        text: '⚠️ Ocorreu um problema ao salvar seu agendamento. Por favor, tente novamente mais tarde.'
+                    });
+                    return;
+                }
+
                 await sock.sendMessage(sender, {
                     text:
-                        `✅ Agendamento confirmado!\n` +
-                        `✅ ${estado.servicoEscolhido}\n` +
-                        `✅ ${estado.horarioEscolhido}\n` +
-                        `✅ ${estado.pagamentoEscolhido}\n` +
-                        `✅ R$${estado.valorEscolhido}\n\n` +
-                        `Obrigado! Até breve.`
+                        `✅ *Agendamento confirmado!* \n\n` +
+                        `💈 *Serviço:* ${estado.servicoEscolhido}\n` +
+                        `💰 *Valor:* R$${estado.valorEscolhido}\n` +
+                        `🕒 *Horário:* ${estado.horarioEscolhido}\n` +
+                        `💳 *Pagamento:* ${estado.pagamentoEscolhido}\n\n` +
+                        `*Obrigado, ${estado.nome}! Até breve.*`
                 });
+
                 clearTimeout(estado.timeout);
                 delete estados[sender];
             } else {
@@ -147,7 +203,7 @@ async function handleMessage(sock, msg) {
                 });
             }
             break;
+        }
     }
-}
 
-module.exports = { handleMessage };
+    module.exports = { handleMessage };
