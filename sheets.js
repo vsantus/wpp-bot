@@ -15,6 +15,24 @@ async function getClient() {
     return await auth.getClient();
 }
 
+async function listarHorariosDisponiveis() {
+    const client = await getClient();
+    const sheets = google.sheets({ version: 'v4', auth: client });
+
+    const resposta = await sheets.spreadsheets.values.get({
+        spreadsheetId: SPREADSHEET_ID,
+        range: 'Disponiveis!A2:C', // Começa da linha 2 para ignorar o cabeçalho
+    });
+
+    const linhas = resposta.data.values || [];
+
+    const horariosDisponiveis = linhas
+        .filter(linha => linha[2]?.toLowerCase() === 'sim') // coluna C (índice 2)
+        .map(linha => linha[1]); // coluna B (índice 1) = horário
+
+    return horariosDisponiveis;
+}
+
 async function registrarAgendamento({ nome, telefone, servico, horario, pagamento }) {
     const client = await getClient();
     const sheets = google.sheets({ version: 'v4', auth: client });
@@ -25,18 +43,24 @@ async function registrarAgendamento({ nome, telefone, servico, horario, pagament
         nome,
         telefone,
         'Agendado',
-        `Serviço: ${servico}, Pagamento: ${pagamento}`
+        `${servico}`, 
+        `${pagamento}`
     ]];
 
     await sheets.spreadsheets.values.append({
-        spreadsheetId: SPREADSHEET_ID,
-        range: 'Agendamentos!A:F',
-        valueInputOption: 'USER_ENTERED',
-        requestBody: {
-            values: novaLinha
-        }
-    });
+    spreadsheetId: SPREADSHEET_ID,
+    range: 'Agendamento!A2', // <- corrigido aqui
+    valueInputOption: 'USER_ENTERED',
+    requestBody: {
+        values: novaLinha
+    }
+});
+
 }
 
-module.exports = { salvarAgendamento: registrarAgendamento };
+module.exports = {
+    salvarAgendamento: registrarAgendamento,
+    listarHorariosDisponiveis
+};
+
 
