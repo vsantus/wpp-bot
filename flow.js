@@ -1,4 +1,4 @@
-const { salvarAgendamento, listarHorariosDisponiveis} = require('./sheets');
+const { salvarAgendamento, listarHorariosDisponiveis, marcarHorarioComoIndisponivel,buscarAgendamentosPorTelefone } = require('./sheets');
 const { salvarNomeUsuario, buscarCliente } = require('./firebase');
 const estados = {}; // Armazena o estado de cada usuário
 
@@ -97,11 +97,25 @@ async function handleMessage(sock, msg) {
                         });
                         break;
                     case '4':
-                        await delay(1000);
-                        await sock.sendMessage(sender, {
-                            text: '📅 Seus agendamentos são: (exemplo de agendamento aqui)'
-                        });
+                        const agendamentos = await buscarAgendamentosPorTelefone(sender);
+
+                        if (agendamentos.length === 0) {
+                            await sock.sendMessage(sender, {
+                                text: '📭 Você não possui nenhum agendamento até o momento.'
+                            });
+                        } else {
+                            const resposta = agendamentos.map((a) =>
+                                `🗓️ *${a.horario}*\n` +
+                                `• *Serviço:* ${a.servico}\n` +
+                                `• *Status:* ${a.status}`
+                            ).join('\n\n');
+
+                            await sock.sendMessage(sender, {
+                                text: `📅 *Seus agendamentos:*\n\n${resposta}`
+                            });
+                        }
                         break;
+
                 }
             }
             break;
@@ -141,7 +155,7 @@ async function handleMessage(sock, msg) {
                 });
             } else {
                 await sock.sendMessage(sender, {
-                    text: '❌ Opção inválida. Escolha um número de 1 a 6 ou digite "Voltar".'
+                    text: '❌ Opção inválida. \n Escolha um número válido ou digite "Voltar".'
                 });
             }
             break;
@@ -189,6 +203,10 @@ async function handleMessage(sock, msg) {
                         pagamento: estado.pagamentoEscolhido,
                         data: new Date().toLocaleString()
                     });
+
+
+                    await marcarHorarioComoIndisponivel(estado.horarioEscolhido);
+
                 } catch (error) {
                     console.error('Erro ao salvar no Sheets:', error);
                     await sock.sendMessage(sender, {
