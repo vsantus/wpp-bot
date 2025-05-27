@@ -1,4 +1,4 @@
-const { salvarAgendamento, listarHorariosDisponiveis, marcarHorarioComoIndisponivel,buscarAgendamentosPorTelefone } = require('./sheets');
+const { salvarAgendamento, listarHorariosDisponiveis, marcarHorarioComoIndisponivel, buscarAgendamentosPorTelefone, cancelarAgendamento } = require('./sheets');
 const { salvarNomeUsuario, buscarCliente } = require('./firebase');
 const estados = {}; // Armazena o estado de cada usuário
 
@@ -23,10 +23,15 @@ async function handleMessage(sock, msg) {
 
     // Encerrar manualmente
     if (entrada === 'sair') {
-        clearTimeout(estado.timeout);
-        delete estados[sender];
-        await sock.sendMessage(sender, { text: '✅ Atendimento encerrado. \n Quando quiser, é só mandar mensagem de novo!' });
-        return;
+        // Dentro da função handleMessage, sempre que o usuário interage:
+        clearTimeout(estados[sender].timeout);
+        estados[sender].timeout = setTimeout(async () => {
+            await sock.sendMessage(sender, {
+                text: '⏳ O atendimento foi encerrado por inatividade ou tempo limite.\nCaso precise de algo, é só mandar uma nova mensagem!'
+            });
+            delete estados[sender];
+        }, 10 * 60 * 1000); // 10 minutos
+
     }
 
     // Voltar à etapa anterior
@@ -42,7 +47,7 @@ async function handleMessage(sock, msg) {
             estado.etapa = 'solicitar_nome';
             estado.nomeVerificado = true;
             await sock.sendMessage(sender, {
-                text: '👋 Olá! Antes de começarmos, qual o seu *nome*?'
+                text: '👋 Olá! Antes de começarmos, qual o seu *nome*? \n _Obs: Nome e Sobrenome_'
             });
             return;
         } else {
@@ -115,7 +120,6 @@ async function handleMessage(sock, msg) {
                             });
                         }
                         break;
-
                 }
             }
             break;

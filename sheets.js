@@ -21,29 +21,35 @@ async function marcarHorarioComoIndisponivel(horarioEscolhido) {
 
     const resposta = await sheets.spreadsheets.values.get({
         spreadsheetId: SPREADSHEET_ID,
-        range: 'Disponiveis!A2:C', // Considerando que os dados começam na linha 2
+        range: 'Disponiveis!B2:D', // B = dia, C = hora, D = disponível
     });
 
     const linhas = resposta.data.values || [];
 
-    // Procura a linha que contém o horário escolhido
-    const linhaIndex = linhas.findIndex(linha => linha[1] === horarioEscolhido);
+    // Encontrar a linha com o horário exato
+    const linhaIndex = linhas.findIndex(linha => {
+        const dia = linha[0];
+        const hora = linha[1];
+        const horarioFormatado = `${dia} às ${hora}h`;
+        return horarioFormatado === horarioEscolhido;
+    });
 
     if (linhaIndex === -1) {
         throw new Error(`Horário ${horarioEscolhido} não encontrado na planilha`);
     }
 
-    // A planilha começa na linha 2, então somamos 2 ao índice
-    const linhaParaAtualizar = linhaIndex + 2;
+    const linhaParaAtualizar = linhaIndex + 2; // +2 porque começa na linha 2
 
     await sheets.spreadsheets.values.update({
         spreadsheetId: SPREADSHEET_ID,
-        range: `Disponiveis!C${linhaParaAtualizar}`, // Coluna C = Disponível?
+        range: `Disponiveis!D${linhaParaAtualizar}`, // Coluna D = Disponível?
         valueInputOption: 'USER_ENTERED',
         requestBody: {
             values: [['não']]
         }
     });
+
+    console.log(`Horário ${horarioEscolhido} marcado como indisponível.`);
 }
 
 async function buscarAgendamentosPorTelefone(telefone) {
@@ -57,27 +63,18 @@ async function buscarAgendamentosPorTelefone(telefone) {
 
     const linhas = resposta.data.values || [];
 
-    // Filtra os agendamentos que correspondem ao telefone
-    const agendamentos = linhas.filter(linha => linha[3] === telefone);
-
-    return agendamentos.map(linha => ({
-        data: linha[0],
-        horario: linha[1],
-        nome: linha[2],
-        telefone: linha[3],
-        status: linha[4],
-        servico: linha[5],
-        pagamento: linha[6]
-    }));
+    return linhas
+        .filter(linha => linha[3] === telefone)
+        .map(linha => ({
+            criado: linha[0],
+            horario: linha[1],
+            nome: linha[2],
+            telefone: linha[3],
+            status: linha[4],
+            servico: linha[5],
+            pagamento: linha[6]
+        }));
 }
-
-module.exports = {
-    salvarAgendamento: registrarAgendamento,
-    listarHorariosDisponiveis,
-    buscarAgendamentosPorTelefone, // <-- nova função exportada
-};
-
-
 
 async function listarHorariosDisponiveis() {
     const client = await getClient();
@@ -85,14 +82,14 @@ async function listarHorariosDisponiveis() {
 
     const resposta = await sheets.spreadsheets.values.get({
         spreadsheetId: SPREADSHEET_ID,
-        range: 'Disponiveis!A2:C', // Começa da linha 2 para ignorar o cabeçalho
+        range: 'Disponiveis!B2:D', // Ignora o cabeçalho
     });
 
     const linhas = resposta.data.values || [];
 
     const horariosDisponiveis = linhas
-        .filter(linha => linha[2]?.toLowerCase() === 'sim') // coluna C (índice 2)
-        .map(linha => linha[1]); // coluna B (índice 1) = horário
+        .filter(linha => linha[2]?.toLowerCase() === 'sim') // Disponível (coluna D)
+        .map(linha => `${linha[0]} às ${linha[1]}h`); // Dia + Horário
 
     return horariosDisponiveis;
 }
@@ -113,18 +110,21 @@ async function registrarAgendamento({ nome, telefone, servico, horario, pagament
 
     await sheets.spreadsheets.values.append({
         spreadsheetId: SPREADSHEET_ID,
-        range: 'Agendamento!A2', // <- corrigido aqui
+        range: 'Agendamento!A2',
         valueInputOption: 'USER_ENTERED',
         requestBody: {
             values: novaLinha
         }
     });
-
 }
+
+
+
+
 
 module.exports = {
     salvarAgendamento: registrarAgendamento,
-    listarHorariosDisponiveis, marcarHorarioComoIndisponivel, buscarAgendamentosPorTelefone
+    listarHorariosDisponiveis, marcarHorarioComoIndisponivel, buscarAgendamentosPorTelefone, cancelarAgendamento
 };
 
 
