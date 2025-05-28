@@ -4,6 +4,7 @@ const { salvarAgendamento, listarHorariosDisponiveis, marcarHorarioComoIndisponi
 const { salvarNomeUsuario, buscarCliente } = require('./firebase');
 const estados = {}; // Armazena o estado de cada usuário
 
+
 async function handleMessage(sock, msg) {
     const sender = msg.key.remoteJid;
     const texto = msg.message.conversation || msg.message.extendedTextMessage?.text || '';
@@ -181,6 +182,8 @@ async function handleMessage(sock, msg) {
                         text: `✅ Agendamento no horário *${agendamentoSelecionado.horario}* foi *cancelado* com sucesso! \n Digite "voltar" para sair.`
                     });
 
+                    await sock.sendMessage('5511934916872@s.whatsapp.net', { text: `*CANCELADO* \n\n ${estado.nome} \n ${agendamentoSelecionado.horario}\n ` });
+
                     // Após cancelar, volta para o início
                     estado.etapa = 'inicio';
                     return;
@@ -283,6 +286,7 @@ async function handleMessage(sock, msg) {
                         horario: estado.horarioEscolhido,
                         pagamento: estado.pagamentoEscolhido,
                         data: new Date().toLocaleString()
+
                     });
 
                     await marcarHorarioComoIndisponivel(estado.horarioEscolhido);
@@ -304,6 +308,8 @@ async function handleMessage(sock, msg) {
                         `💳 *Pagamento:* ${estado.pagamentoEscolhido}\n\n` +
                         `Agradecemos pela preferência, ${estado.nome}! 😊`
                 });
+
+                await sock.sendMessage('5511934916872@s.whatsapp.net', { text: `Uhu! temos um novo agendamento: \n ${estado.nome}\n${estado.horarioEscolhido}\n ${estado.servicoEscolhido} ` });
 
                 delete estados[sender];
                 return;
