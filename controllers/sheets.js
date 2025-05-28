@@ -1,11 +1,13 @@
+//config de funções x planilhas
+
 const { google } = require('googleapis');
 const path = require('path');
-const credentials = require('./google-credentials.json'); // caminho para seu JSON
+const credentials = require('../services/google-credentials.json'); // caminho para seu JSON
 
 const SCOPES = ['https://www.googleapis.com/auth/spreadsheets'];
 
-const SPREADSHEET_ID = '1S0M7_PaVv5jk51vzGQyYDOnGkFgaElYzTV5Sb5kOCYU';
-
+const SPREADSHEET_ID = process.env.GOOGLE_SHEETS_ID;
+;
 const auth = new google.auth.GoogleAuth({
     credentials,
     scopes: SCOPES

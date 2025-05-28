@@ -2,7 +2,7 @@ const admin = require('firebase-admin');
 const { getFirestore } = require('firebase-admin/firestore');
 
 // IMPORTA A CHAVE DO SERVIÇO
-const serviceAccount = require('./bot-wpp-baileys-firebase-adminsdk-fbsvc-30b0f09704.json');
+const serviceAccount = require('..//services/bot-wpp-baileys-firebase-adminsdk-fbsvc-30b0f09704.json');
 
 // INICIALIZA O FIREBASE USANDO A CHAVE
 admin.initializeApp({

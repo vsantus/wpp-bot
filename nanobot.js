@@ -1,8 +1,10 @@
+//inicializador do bot node nanobot.js no terminal
+
 const { default: makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion, DisconnectReason } = require('baileys');
 const { Boom } = require('@hapi/boom');
 const qrcode = require('qrcode-terminal');
 const path = require('path');
-const { handleMessage } = require('./flow'); // <-- importa o fluxo aqui
+const { handleMessage } = require('./controllers/flow'); // <-- importa o fluxo aqui
 
 let sock;
 

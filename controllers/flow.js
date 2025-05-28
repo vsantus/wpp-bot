@@ -1,3 +1,5 @@
+//flow de conversa do bot com usuario
+
 const { salvarAgendamento, listarHorariosDisponiveis, marcarHorarioComoIndisponivel, buscarAgendamentosPorTelefone, cancelarAgendamento } = require('./sheets');
 const { salvarNomeUsuario, buscarCliente } = require('./firebase');
 const estados = {}; // Armazena o estado de cada usuário
