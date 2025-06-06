@@ -1,6 +1,8 @@
 # autenticação unica por usuario 
 /auth
 
+/node_modules
+
 # firebase key
 bot-wpp-baileys-firebase-adminsdk-fbsvc-30b0f09704.json
 

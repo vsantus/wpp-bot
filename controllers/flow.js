@@ -79,7 +79,12 @@ async function handleMessage(sock, msg) {
             await salvarNomeUsuario(sender, texto);
             estado.etapa = 'inicio';
             await sock.sendMessage(sender, {
-                text: `✅ Obrigado, ${texto}! Agora sim, vamos começar.`
+                text: `✅ Obrigado, ${texto}! \n Agora sim, vamos começar, como posso te ajudar?\n` +
+                        `1. 🗓️ Realizar agendamento\n` +
+                        `2. 💰 Preços\n` +
+                        `3. 📍 Endereço\n` +
+                        `4. 🔎 Meus agendamentos\n\n` +
+                        `↩️ _Digite "Sair" para encerrar o atendimento._`
             });
             return;
 
@@ -145,7 +150,7 @@ async function handleMessage(sock, msg) {
 
                         await sock.sendMessage(sender, {
                             text: `📅 *Seus agendamentos:*\n\n${resposta}\n\n` +
-                                `Digite o número do agendamento para cancelar ou "voltar" para o menu principal.`
+                                `Digite o *Número do agendamento* para cancelar ou *"voltar"* para o menu principal.`
                         });
                         return;
                     }
@@ -182,7 +187,7 @@ async function handleMessage(sock, msg) {
                         text: `✅ Agendamento no horário *${agendamentoSelecionado.horario}* foi *cancelado* com sucesso! \n Digite "voltar" para sair.`
                     });
 
-                    await sock.sendMessage('5511934916872@s.whatsapp.net', { text: `*CANCELADO* \n\n ${estado.nome} \n ${agendamentoSelecionado.horario}\n ` });
+                    await sock.sendMessage('5511987654321@s.whatsapp.net', { text: `*❌CANCELADO❌* \n\n ${estado.nome}, ${agendamentoSelecionado.horario} ` });
 
                     // Após cancelar, volta para o início
                     estado.etapa = 'inicio';
@@ -309,8 +314,8 @@ async function handleMessage(sock, msg) {
                         `Agradecemos pela preferência, ${estado.nome}! 😊`
                 });
 
-                await sock.sendMessage('5511934916872@s.whatsapp.net', { text: `Uhu! temos um novo agendamento: \n ${estado.nome}\n${estado.horarioEscolhido}\n ${estado.servicoEscolhido} ` });
-
+                await sock.sendMessage('5511987654321@s.whatsapp.net', { text: `*Uhu! temos um novo agendamento:* \n ${estado.nome} vem ${estado.horarioEscolhido} \n *Serviço:* ${estado.servicoEscolhido} ` });
+                //numero do dono do estabelecimento
                 delete estados[sender];
                 return;
             } else {
