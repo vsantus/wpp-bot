@@ -1,11 +1,14 @@
 # autenticação unica por usuario 
 auth/
 
+# node
 node_modules/
 
 # firebase key
 bot-wpp-baileys-firebase-adminsdk-fbsvc-30b0f09704.json
 
+# google cloud api
 google-credentials.json
 
+# keys
 .env

@@ -4,7 +4,6 @@ const { salvarAgendamento, listarHorariosDisponiveis, marcarHorarioComoIndisponi
 const { salvarNomeUsuario, buscarCliente } = require('./firebase');
 const estados = {}; // Armazena o estado de cada usuário
 
-
 async function handleMessage(sock, msg) {
     const sender = msg.key.remoteJid;
     const texto = msg.message.conversation || msg.message.extendedTextMessage?.text || '';
@@ -24,23 +23,30 @@ async function handleMessage(sock, msg) {
     const estado = estados[sender];
     const etapaAtual = estado.etapa;
 
-    // Função para iniciar timeout de inatividade
+
+    // Função de encerramento 
+    async function encerrarAtendimento(user, sock, motivo = 'inatividade') {
+        const estado = estados[user];
+        if (!estado) return;
+
+        clearTimeout(estado.timeout);
+
+        let mensagem = motivo === 'manual'
+            ? '✅ Atendimento encerrado. Se precisar, é só chamar novamente!'
+            : '⏳ O atendimento foi encerrado por inatividade ou tempo limite.\nCaso precise de algo, é só mandar uma nova mensagem!';
+
+        await sock.sendMessage(user, { text: mensagem });
+        delete estados[user];
+    }
+
+    // Iniciar timeout
     function iniciarTimeout(user, sock) {
-        estados[user].timeout = setTimeout(async () => {
-            await sock.sendMessage(user, {
-                text: '⏳ O atendimento foi encerrado por inatividade ou tempo limite.\nCaso precise de algo, é só mandar uma nova mensagem!'
-            });
-            delete estados[user];
-        }, 10 * 60 * 1000); // 10 minutos
+        estados[user].timeout = setTimeout(() => encerrarAtendimento(user, sock, 'inatividade'), 1 * 60 * 1000);
     }
 
     // Encerrar atendimento manualmente
     if (entrada === 'sair') {
-        clearTimeout(estado.timeout);
-        await sock.sendMessage(sender, {
-            text: ' Atendimento encerrado. Se precisar, é só chamar novamente!'
-        });
-        delete estados[sender];
+        await encerrarAtendimento(sender, sock, 'manual');
         return;
     }
 
@@ -67,6 +73,9 @@ async function handleMessage(sock, msg) {
         }
     }
 
+
+
+    // Atendimento por etapa
     switch (etapaAtual) {
         case 'solicitar_nome':
             if (entrada.length < 2) {
@@ -80,11 +89,11 @@ async function handleMessage(sock, msg) {
             estado.etapa = 'inicio';
             await sock.sendMessage(sender, {
                 text: `✅ Obrigado, ${texto}! \n Agora sim, vamos começar, como posso te ajudar?\n` +
-                        `1. 🗓️ Realizar agendamento\n` +
-                        `2. 💰 Preços\n` +
-                        `3. 📍 Endereço\n` +
-                        `4. 🔎 Meus agendamentos\n\n` +
-                        `↩️ _Digite "Sair" para encerrar o atendimento._`
+                    `1. 🗓️ Realizar agendamento\n` +
+                    `2. 💰 Valores\n` +
+                    `3. 📍 Endereço\n` +
+                    `4. 🔎 Meus agendamentos\n\n` +
+                    `↩️ _Digite "Sair" para encerrar o atendimento._`
             });
             return;
 
@@ -94,7 +103,7 @@ async function handleMessage(sock, msg) {
                 await sock.sendMessage(sender, {
                     text: `Olá ${estado.nome}, como posso te ajudar?\n` +
                         `1. 🗓️ Realizar agendamento\n` +
-                        `2. 💰 Preços\n` +
+                        `2. 💰 Valores\n` +
                         `3. 📍 Endereço\n` +
                         `4. 🔎 Meus agendamentos\n\n` +
                         `↩️ _Digite "Sair" para encerrar o atendimento._`
@@ -117,7 +126,7 @@ async function handleMessage(sock, msg) {
                 case '2':
                     await delay(1000);
                     await sock.sendMessage(sender, {
-                        text: '💈 *Preços:*\n' +
+                        text: '💈 *Valores:*\n' +
                             'Corte: R$30\nBarba: R$20\nSobrancelha: R$15\nCorte + Barba: R$45\nCorte + Sobrancelha: R$40\nCorte + Barba + Sobrancelha: R$60\n\n' +
                             '↩️ _Digite "Voltar" para retornar._'
                     });
@@ -187,7 +196,7 @@ async function handleMessage(sock, msg) {
                         text: `✅ Agendamento no horário *${agendamentoSelecionado.horario}* foi *cancelado* com sucesso! \n Digite "voltar" para sair.`
                     });
 
-                    await sock.sendMessage('5511987654321@s.whatsapp.net', { text: `*❌CANCELADO❌* \n\n ${estado.nome}, ${agendamentoSelecionado.horario} ` });
+                    await sock.sendMessage('5511934916872@s.whatsapp.net', { text: `*CANCELADO ❌* \n ${estado.nome}, ${agendamentoSelecionado.horario} ` });
 
                     // Após cancelar, volta para o início
                     estado.etapa = 'inicio';
@@ -314,7 +323,9 @@ async function handleMessage(sock, msg) {
                         `Agradecemos pela preferência, ${estado.nome}! 😊`
                 });
 
-                await sock.sendMessage('5511987654321@s.whatsapp.net', { text: `*Uhu! temos um novo agendamento:* \n ${estado.nome} vem ${estado.horarioEscolhido} \n *Serviço:* ${estado.servicoEscolhido} ` });
+                await encerrarAtendimento(sender, sock, 'manual');
+
+                await sock.sendMessage('5511934916872@s.whatsapp.net', { text: `*Uhu! temos um novo agendamento:* \n ${estado.nome} vem ${estado.horarioEscolhido} \n *Serviço:* ${estado.servicoEscolhido} \n *FP:* ${estado.pagamentoEscolhido} ` });
                 //numero do dono do estabelecimento
                 delete estados[sender];
                 return;
@@ -324,14 +335,6 @@ async function handleMessage(sock, msg) {
                 });
                 return;
             }
-
-
-        default:
-            await sock.sendMessage(sender, {
-                text: '❌ Desculpe, não entendi sua mensagem. Por favor, escolha uma opção válida.'
-            });
-            estado.etapa = 'inicio';
-            return;
     }
 }
 

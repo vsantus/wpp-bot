@@ -202,12 +202,13 @@ async function cancelarAgendamento({ telefone, horarioEscolhido }) {
         requestBody: { values: [['x']] } // célula vazia
     });
 
-    console.log('Telefone apagado da célula linha[3].');
 
     console.log(`Horário ${horarioEscolhido} marcado como disponível.`);
 
     console.log('Cancelamento concluído com sucesso!');
 }
+
+
 
 module.exports = {
     salvarAgendamento: registrarAgendamento,
