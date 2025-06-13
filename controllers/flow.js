@@ -39,6 +39,31 @@ async function handleMessage(sock, msg) {
         delete estados[user];
     }
 
+    async function voltarInicio(sock, user){ //criar uma function dessa em cada case, alterar delete para excluir etapa atual
+        const estado = estados[user];
+        if (!estado) return;
+
+        clearTimeout(estado.timeout);
+        estado.etapa = 'inicio';
+        estado.historico = [];
+        estado.nomeVerificado = false;
+        delete estado.servicoEscolhido;
+        delete estado.valorEscolhido;
+        delete estado.horarioEscolhido;
+        delete estado.pagamentoEscolhido;
+        delete estado.horariosDisponiveis;
+
+        await sock.sendMessage(user, {
+            text: `🔄 Você voltou ao início. Como posso te ajudar?\n` +
+                `1. 🗓️ Realizar agendamento\n` +
+                `2. 💰 Valores\n` +
+                `3. 📍 Endereço\n` +
+                `4. 🔎 Meus agendamentos\n\n` +
+                `↩️ _Digite "Sair" para encerrar o atendimento._`
+        });
+
+    }
+
     // Iniciar timeout
     function iniciarTimeout(user, sock) {
         estados[user].timeout = setTimeout(() => encerrarAtendimento(user, sock, 'inatividade'), 1 * 60 * 1000);
@@ -54,6 +79,7 @@ async function handleMessage(sock, msg) {
     if (entrada === 'voltar' && estado.historico.length > 0) {
         estado.etapa = estado.historico.pop();
         await sock.sendMessage(sender, { text: '🔙 Voltando à etapa anterior...' });
+        await voltarInicio(sock, sender);
         return; // aguarda próxima mensagem do usuário para processar
     }
 
