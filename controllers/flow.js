@@ -39,6 +39,12 @@ async function handleMessage(sock, msg) {
         delete estados[user];
     }
 
+    // Encerrar atendimento 
+    if (entrada === 'sair') {
+        await encerrarAtendimento(sender, sock, 'manual');
+        return;
+    }
+
     async function voltarInicio(sock, user){ //criar uma function dessa em cada case, alterar delete para excluir etapa atual
         const estado = estados[user];
         if (!estado) return;
@@ -54,7 +60,7 @@ async function handleMessage(sock, msg) {
         delete estado.horariosDisponiveis;
 
         await sock.sendMessage(user, {
-            text: `🔄 Você voltou ao início. Como posso te ajudar?\n` +
+            text: `🔄 Você voltou ao Menu. Como posso te ajudar?\n` +
                 `1. 🗓️ Realizar agendamento\n` +
                 `2. 💰 Valores\n` +
                 `3. 📍 Endereço\n` +
@@ -64,23 +70,47 @@ async function handleMessage(sock, msg) {
 
     }
 
+        async function voltarServico(sock, user){ //criar uma function dessa em cada case, alterar delete para excluir etapa atual
+        const estado = estados[user];
+        if (!estado) return;
+
+        clearTimeout(estado.timeout);
+        estado.etapa = 'servico';
+        estado.historico = [];
+        estado.nomeVerificado = false;
+        delete estado.servicoEscolhido;
+        
+
+        await sock.sendMessage(sender, {
+                        text: 'Qual serviço você deseja agendar?\n' +
+                            '1. Corte\n2. Barba\n3. Sobrancelha\n4. Corte + Barba\n5. Corte + Sobrancelha\n6. Corte + Barba + Sobrancelha\n\n' +
+                            '↩️ _Digite "M" para retornar ao Menu._'
+                    });
+        ;
+
+    }
+
+
+
     // Iniciar timeout
     function iniciarTimeout(user, sock) {
         estados[user].timeout = setTimeout(() => encerrarAtendimento(user, sock, 'inatividade'), 1 * 60 * 1000);
     }
 
-    // Encerrar atendimento manualmente
-    if (entrada === 'sair') {
-        await encerrarAtendimento(sender, sock, 'manual');
-        return;
-    }
-
     // Voltar etapa anterior
     if (entrada === 'voltar' && estado.historico.length > 0) {
         estado.etapa = estado.historico.pop();
-        await sock.sendMessage(sender, { text: '🔙 Voltando à etapa anterior...' });
-        await voltarInicio(sock, sender);
+        await sock.sendMessage(sender, { text: '🔙 Voltando para Serviço...' });
+        await voltarServico(sock, sender);
         return; // aguarda próxima mensagem do usuário para processar
+    }
+
+    // Voltar para o Inicio
+    if (entrada === 'M' && estado.historico.length > 0) {
+        estado.etapa = estado.historico.pop();
+        await sock.sendMessage(sender, { text: '🔙 Voltando ao Menu...' });
+        await voltarInicio(sock, sender);
+        return; 
     }
 
     // Verifica se nome do usuário já foi buscado ou salvo
@@ -137,6 +167,7 @@ async function handleMessage(sock, msg) {
                 return;
             }
             estado.historico.push('inicio');
+            console.log(estado.historico);
 
             switch (entrada) {
                 case '1':
@@ -145,7 +176,7 @@ async function handleMessage(sock, msg) {
                     await sock.sendMessage(sender, {
                         text: 'Qual serviço você deseja agendar?\n' +
                             '1. Corte\n2. Barba\n3. Sobrancelha\n4. Corte + Barba\n5. Corte + Sobrancelha\n6. Corte + Barba + Sobrancelha\n\n' +
-                            '↩️ _Digite "Voltar" para retornar._'
+                            '↩️ _Digite "M" para retornar ao Menu._'
                     });
                     return;
 
@@ -154,14 +185,14 @@ async function handleMessage(sock, msg) {
                     await sock.sendMessage(sender, {
                         text: '💈 *Valores:*\n' +
                             'Corte: R$30\nBarba: R$20\nSobrancelha: R$15\nCorte + Barba: R$45\nCorte + Sobrancelha: R$40\nCorte + Barba + Sobrancelha: R$60\n\n' +
-                            '↩️ _Digite "Voltar" para retornar._'
+                            '↩️ _Digite "M" para retornar ao Menu._'
                     });
                     return;
 
                 case '3':
                     await delay(1000);
                     await sock.sendMessage(sender, {
-                        text: '📍 Nosso endereço é Rua Alamedas, 1234 - Centro\n\n↩️ _Digite "Voltar" para retornar._'
+                        text: '📍 Nosso endereço é Rua Alamedas, 1234 - Centro\n\n ↩️ _Digite "M" para retornar ao Menu._'
                     });
                     return;
 
@@ -185,7 +216,7 @@ async function handleMessage(sock, msg) {
 
                         await sock.sendMessage(sender, {
                             text: `📅 *Seus agendamentos:*\n\n${resposta}\n\n` +
-                                `Digite o *Número do agendamento* para cancelar ou *"voltar"* para o menu principal.`
+                                `Digite o *Número do agendamento* para cancelar \n\n *"M"* para voltar ao menu principal.`
                         });
                         return;
                     }
@@ -258,6 +289,7 @@ async function handleMessage(sock, msg) {
                 estado.servicoEscolhido = servico.nome;
                 estado.valorEscolhido = servico.valor;
                 estado.historico.push('servico');
+                console.log(estado.historico);
                 estado.etapa = 'horario';
 
                 const horarios = await listarHorariosDisponiveis();
@@ -291,7 +323,9 @@ async function handleMessage(sock, msg) {
             if (!isNaN(idx) && idx >= 1 && idx <= lista.length) {
                 estado.horarioEscolhido = lista[idx - 1];
                 estado.historico.push('horario');
+                console.log(estado.historico);
                 estado.etapa = 'pagamento';
+                
 
                 await delay(2000);
                 await sock.sendMessage(sender, {
