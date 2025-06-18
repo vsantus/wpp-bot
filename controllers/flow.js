@@ -36,22 +36,25 @@ async function handleMessage(sock, msg) {
             : '⏳ O atendimento foi encerrado por inatividade ou tempo limite.\nCaso precise de algo, é só mandar uma nova mensagem!';
 
         await sock.sendMessage(user, { text: mensagem });
+
         delete estados[user];
+        console.log('encerrando sem limpar estado -> ' + estado.historico);
     }
 
     // Encerrar atendimento 
     if (entrada === 'sair') {
         await encerrarAtendimento(sender, sock, 'manual');
+
         return;
     }
 
-    async function voltarInicio(sock, user){ //criar uma function dessa em cada case, alterar delete para excluir etapa atual
+    async function voltarInicio(sock, user) { //criar uma function dessa em cada case, alterar delete para excluir etapa atual
         const estado = estados[user];
         if (!estado) return;
 
         clearTimeout(estado.timeout);
         estado.etapa = 'inicio';
-        estado.historico = [];
+        estado.historico.push = [];
         estado.nomeVerificado = false;
         delete estado.servicoEscolhido;
         delete estado.valorEscolhido;
@@ -70,47 +73,96 @@ async function handleMessage(sock, msg) {
 
     }
 
-        async function voltarServico(sock, user){ //criar uma function dessa em cada case, alterar delete para excluir etapa atual
+    async function voltarEtapa(sock, user, etapa, texto, callback) {
+    const estado = estados[user];
+    if (!estado) return;
+
+    if (estado.historico.length > 0) {
+        estado.etapa = estado.historico.pop();
+    } else {
+        estado.etapa = etapa; // fallback
+    }
+
+    await sock.sendMessage(user, { text: texto });
+    await callback(sock, user);
+}
+
+
+    async function voltarServico(sock, user) { // funcionando se o outro voltar estiver comentado ???
+
         const estado = estados[user];
         if (!estado) return;
 
         clearTimeout(estado.timeout);
-        estado.etapa = 'servico';
         estado.historico = [];
         estado.nomeVerificado = false;
         delete estado.servicoEscolhido;
-        
+
 
         await sock.sendMessage(sender, {
-                        text: 'Qual serviço você deseja agendar?\n' +
-                            '1. Corte\n2. Barba\n3. Sobrancelha\n4. Corte + Barba\n5. Corte + Sobrancelha\n6. Corte + Barba + Sobrancelha\n\n' +
-                            '↩️ _Digite "M" para retornar ao Menu._'
-                    });
+            text: 'Qual serviço você deseja agendar?\n' +
+                '1. Corte\n2. Barba\n3. Sobrancelha\n4. Corte + Barba\n5. Corte + Sobrancelha\n6. Corte + Barba + Sobrancelha\n\n' +
+                '↩️ _Digite "M" para retornar ao Menu._'
+        });
         ;
 
     }
 
+    async function voltarHorario(sock, user) { // funcionando se o outro voltar estiver comentado ??
 
+        const estado = estados[user];
+        if (!estado) return;
+
+        clearTimeout(estado.timeout);
+        estado.historico = [];
+        estado.nomeVerificado = false;
+        delete estado.horarioEscolhido;
+    
+                const horarios = await listarHorariosDisponiveis();
+                estado.horariosDisponiveis = horarios;
+
+                if (horarios.length === 0) {
+                    await sock.sendMessage(sender, {
+                        text: '⚠️ No momento não há horários disponíveis. Tente novamente mais tarde.'
+                    });
+                    estado.etapa = 'inicio';
+                    return;
+                }
+
+                const listaHorarios = horarios.map((h, i) => `${i + 1}. ${h}`).join('\n');
+                await delay(2000);
+                await sock.sendMessage(sender, {
+                    text: `📅 Escolha um horário disponível:\n${listaHorarios}\n\n↩️ _Digite "Voltar" para retornar ao serviço._`
+                });
+
+                estado.historico.push('horario');
+                return;
+
+
+    }//criar uma function dessa em cada case, alterar delete para excluir etapa atual
 
     // Iniciar timeout
     function iniciarTimeout(user, sock) {
-        estados[user].timeout = setTimeout(() => encerrarAtendimento(user, sock, 'inatividade'), 1 * 60 * 1000);
+        estados[user].timeout = setTimeout(() => encerrarAtendimento(user, sock, 'inatividade'), 5 * 60 * 1000);
     }
 
-    // Voltar etapa anterior
-    if (entrada === 'voltar' && estado.historico.length > 0) {
-        estado.etapa = estado.historico.pop();
-        await sock.sendMessage(sender, { text: '🔙 Voltando para Serviço...' });
-        await voltarServico(sock, sender);
-        return; // aguarda próxima mensagem do usuário para processar
-    }
+    if (entrada === 'voltars') {
+    await voltarEtapa(sock, sender, 'servico', '🔙 Voltando para Serviço...', voltarServico);
+    return;
+}
 
-    // Voltar para o Inicio
-    if (entrada === 'M' && estado.historico.length > 0) {
-        estado.etapa = estado.historico.pop();
+if (entrada === 'voltarh') {
+    await voltarEtapa(sock, sender, 'horario', '🔙 Voltando para Horário...', voltarHorario);
+    return;
+}
+
+
+
+    // Voltar para o Inicio *obs: lugares que nao tem estado, funciona a chamada para o menu
+    if (entrada === 'Menu' && estado.historico.length >= 0) {
         await sock.sendMessage(sender, { text: '🔙 Voltando ao Menu...' });
         await voltarInicio(sock, sender);
-        return; 
+        return;
     }
 
     // Verifica se nome do usuário já foi buscado ou salvo
@@ -171,12 +223,12 @@ async function handleMessage(sock, msg) {
 
             switch (entrada) {
                 case '1':
-                    estado.etapa = 'servico';
+                    estado.etapa = 'servico'; // primeiro estado 
                     await delay(2000);
                     await sock.sendMessage(sender, {
                         text: 'Qual serviço você deseja agendar?\n' +
                             '1. Corte\n2. Barba\n3. Sobrancelha\n4. Corte + Barba\n5. Corte + Sobrancelha\n6. Corte + Barba + Sobrancelha\n\n' +
-                            '↩️ _Digite "M" para retornar ao Menu._'
+                            '↩️ _Digite "Menu" para retornar ao Menu._'
                     });
                     return;
 
@@ -185,14 +237,14 @@ async function handleMessage(sock, msg) {
                     await sock.sendMessage(sender, {
                         text: '💈 *Valores:*\n' +
                             'Corte: R$30\nBarba: R$20\nSobrancelha: R$15\nCorte + Barba: R$45\nCorte + Sobrancelha: R$40\nCorte + Barba + Sobrancelha: R$60\n\n' +
-                            '↩️ _Digite "M" para retornar ao Menu._'
+                            '↩️ _Digite "Menu" para retornar ao Menu._'
                     });
                     return;
 
                 case '3':
                     await delay(1000);
                     await sock.sendMessage(sender, {
-                        text: '📍 Nosso endereço é Rua Alamedas, 1234 - Centro\n\n ↩️ _Digite "M" para retornar ao Menu._'
+                        text: '📍 Nosso endereço é Rua Alamedas, 1234 - Centro\n\n ↩️ _Digite "Menu" para retornar ao Menu._'
                     });
                     return;
 
@@ -206,7 +258,7 @@ async function handleMessage(sock, msg) {
                     } else {
                         // Armazenar os agendamentos no estado para usar na etapa seguinte
                         estado.agendamentos = agendamentos;
-                        estado.etapa = 'cancelar_ou_ver';
+                        estado.etapa = 'cancelar_ou_ver'; // segundo estado 
 
                         const resposta = agendamentos.map((a, i) =>
                             `${i + 1}. 🗓️ *${a.horario}*\n` +
@@ -250,7 +302,7 @@ async function handleMessage(sock, msg) {
                     });
 
                     await sock.sendMessage(sender, {
-                        text: `✅ Agendamento no horário *${agendamentoSelecionado.horario}* foi *cancelado* com sucesso! \n Digite "voltar" para sair.`
+                        text: `✅ Agendamento no horário *${agendamentoSelecionado.horario}* foi *cancelado* com sucesso! \n Digite "Menu" para sair.`
                     });
 
                     await sock.sendMessage('5511934916872@s.whatsapp.net', { text: `*CANCELADO ❌* \n ${estado.nome}, ${agendamentoSelecionado.horario} ` });
@@ -290,7 +342,7 @@ async function handleMessage(sock, msg) {
                 estado.valorEscolhido = servico.valor;
                 estado.historico.push('servico');
                 console.log(estado.historico);
-                estado.etapa = 'horario';
+                estado.etapa = 'horario'; // terceiro estado
 
                 const horarios = await listarHorariosDisponiveis();
                 estado.horariosDisponiveis = horarios;
@@ -306,12 +358,12 @@ async function handleMessage(sock, msg) {
                 const listaHorarios = horarios.map((h, i) => `${i + 1}. ${h}`).join('\n');
                 await delay(2000);
                 await sock.sendMessage(sender, {
-                    text: `📅 Escolha um horário disponível:\n${listaHorarios}\n\n↩️ _Digite "Voltar" para retornar._`
+                    text: `📅 Escolha um horário disponível:\n${listaHorarios}\n\n↩️ _Digite "voltarS" para retornar ao serviço._`
                 });
                 return;
             } else {
                 await sock.sendMessage(sender, {
-                    text: '❌ Opção inválida. \nEscolha um número válido ou digite "Voltar".'
+                    text: '❌ Opção inválida. \nEscolha um número válido ou digite "Voltar" para retornar ao serviço.'
                 });
                 return;
             }
@@ -324,17 +376,18 @@ async function handleMessage(sock, msg) {
                 estado.horarioEscolhido = lista[idx - 1];
                 estado.historico.push('horario');
                 console.log(estado.historico);
-                estado.etapa = 'pagamento';
-                
+                estado.etapa = 'pagamento'; // quarto estado
+                estado.historico.push('pagamento');
+                console.log(estado.historico);
 
                 await delay(2000);
                 await sock.sendMessage(sender, {
-                    text: '🧾 Agora escolha a forma de pagamento:\n1. Pix\n2. Dinheiro\n3. Cartão\n\n↩️ _Digite "Voltar" para retornar._'
+                    text: '🧾 Agora escolha a forma de pagamento:\n1. Pix\n2. Dinheiro\n3. Cartão\n\n↩️ _Digite "voltarH" para retornar ao horario._'
                 });
                 return;
             } else {
                 await sock.sendMessage(sender, {
-                    text: '❌ Opção inválida. Escolha um número válido da lista de horários ou digite "Voltar".'
+                    text: '❌ Opção inválida. Escolha um número válido da lista de horários ou digite "Voltar1" para retornar ao horario.'
                 });
                 return;
             }
@@ -349,6 +402,8 @@ async function handleMessage(sock, msg) {
             if (pagamentos[entrada]) {
                 estado.pagamentoEscolhido = pagamentos[entrada];
                 estado.etapa = 'finalizado';
+                estado.historico.push('finalizado');
+                console.log(estado.historico);
                 await delay(2000);
 
                 try {
