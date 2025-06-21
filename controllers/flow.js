@@ -6,9 +6,33 @@ const estados = {}; // Armazena o estado de cada usuário
 
 async function handleMessage(sock, msg) {
     const sender = msg.key.remoteJid;
-    const texto = msg.message.conversation || msg.message.extendedTextMessage?.text || '';
-    const entrada = texto.trim().toLowerCase();
+    const texto = msg.message.conversation || msg.message.extendedTextMessage?.text || ''; // capturar mensagem de texto
+    const pollResponse = msg.message?.pollUpdateMessage; // capturar mensagem por enquete
     const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+    // lógica para lidar com mensagens de texto e enquetes
+    let entrada = '';
+    if (pollResponse) {
+    const votoId = pollResponse.vote[0]; // esse é o ID interno
+    const opcoes = pollResponse.pollUpdateMessageMetadata?.options || [];
+
+    const opcaoSelecionada = opcoes.find(opt => opt.optionId === votoId);
+
+    if (opcaoSelecionada) {
+        const textoOpcao = opcaoSelecionada.name;
+        entrada = textoOpcao.charAt(0); // Pega o número da opção
+        console.log('Entrada por enquete:', entrada);
+    } else {
+        console.log('Voto não encontrado.');
+        entrada = ''; // fallback
+    }
+} else {
+    entrada = (msg.message.conversation || msg.message.extendedTextMessage?.text || '').trim().toLowerCase();
+    console.log('Entrada por texto:', entrada);
+}
+
+
+    const numero = entrada ? entrada.charAt(0) : '' // pega o primeiro caractere (o número)
 
     // Inicializa estado se não existir
     if (!estados[sender]) {
@@ -74,21 +98,20 @@ async function handleMessage(sock, msg) {
     }
 
     async function voltarEtapa(sock, user, etapa, texto, callback) {
-    const estado = estados[user];
-    if (!estado) return;
+        const estado = estados[user];
+        if (!estado) return;
 
-    if (estado.historico.length > 0) {
-        estado.etapa = estado.historico.pop();
-    } else {
-        estado.etapa = etapa; // fallback
+        if (estado.historico.length > 0) {
+            estado.etapa = estado.historico.pop();
+        } else {
+            estado.etapa = etapa; // fallback
+        }
+
+        await sock.sendMessage(user, { text: texto });
+        await callback(sock, user);
     }
 
-    await sock.sendMessage(user, { text: texto });
-    await callback(sock, user);
-}
-
-
-    async function voltarServico(sock, user) { // funcionando se o outro voltar estiver comentado ???
+    async function voltarServico(sock, user) {
 
         const estado = estados[user];
         if (!estado) return;
@@ -108,7 +131,7 @@ async function handleMessage(sock, msg) {
 
     }
 
-    async function voltarHorario(sock, user) { // funcionando se o outro voltar estiver comentado ??
+    async function voltarHorario(sock, user) {
 
         const estado = estados[user];
         if (!estado) return;
@@ -117,26 +140,26 @@ async function handleMessage(sock, msg) {
         estado.historico = [];
         estado.nomeVerificado = false;
         delete estado.horarioEscolhido;
-    
-                const horarios = await listarHorariosDisponiveis();
-                estado.horariosDisponiveis = horarios;
 
-                if (horarios.length === 0) {
-                    await sock.sendMessage(sender, {
-                        text: '⚠️ No momento não há horários disponíveis. Tente novamente mais tarde.'
-                    });
-                    estado.etapa = 'inicio';
-                    return;
-                }
+        const horarios = await listarHorariosDisponiveis();
+        estado.horariosDisponiveis = horarios;
 
-                const listaHorarios = horarios.map((h, i) => `${i + 1}. ${h}`).join('\n');
-                await delay(2000);
-                await sock.sendMessage(sender, {
-                    text: `📅 Escolha um horário disponível:\n${listaHorarios}\n\n↩️ _Digite "Voltar" para retornar ao serviço._`
-                });
+        if (horarios.length === 0) {
+            await sock.sendMessage(sender, {
+                text: '⚠️ No momento não há horários disponíveis. Tente novamente mais tarde.'
+            });
+            estado.etapa = 'inicio';
+            return;
+        }
 
-                estado.historico.push('horario');
-                return;
+        const listaHorarios = horarios.map((h, i) => `${i + 1}. ${h}`).join('\n');
+        await delay(2000);
+        await sock.sendMessage(sender, {
+            text: `📅 Escolha um horário disponível:\n${listaHorarios}\n\n↩️ _Digite "Voltar" para retornar ao serviço._`
+        });
+
+        estado.historico.push('horario');
+        return;
 
 
     }//criar uma function dessa em cada case, alterar delete para excluir etapa atual
@@ -147,14 +170,14 @@ async function handleMessage(sock, msg) {
     }
 
     if (entrada === 'voltars') {
-    await voltarEtapa(sock, sender, 'servico', '🔙 Voltando para Serviço...', voltarServico);
-    return;
-}
+        await voltarEtapa(sock, sender, 'servico', '🔙 Voltando para Serviço...', voltarServico);
+        return;
+    }
 
-if (entrada === 'voltarh') {
-    await voltarEtapa(sock, sender, 'horario', '🔙 Voltando para Horário...', voltarHorario);
-    return;
-}
+    if (entrada === 'voltarh') {
+        await voltarEtapa(sock, sender, 'horario', '🔙 Voltando para Horário...', voltarHorario);
+        return;
+    }
 
 
 
@@ -209,19 +232,20 @@ if (entrada === 'voltarh') {
             if (!['1', '2', '3', '4'].includes(entrada)) {
                 await delay(2000);
                 await sock.sendMessage(sender, {
-                    text: `Olá ${estado.nome}, como posso te ajudar?\n` +
-                        `1. 🗓️ Realizar agendamento\n` +
-                        `2. 💰 Valores\n` +
-                        `3. 📍 Endereço\n` +
-                        `4. 🔎 Meus agendamentos\n\n` +
-                        `↩️ _Digite "Sair" para encerrar o atendimento._`
+                    poll: {
+                        name: `Olá ${estado.nome}, como posso te ajudar?`,
+                        values: [`1. 🗓️ Realizar agendamento`, `2. 💰 Valores`, `3. 📍 Endereço`, `4. 🔎 Meus agendamentos`, `↩️ _Digite "Sair" para encerrar o atendimento._`]
+                    }
+
                 });
                 return;
             }
             estado.historico.push('inicio');
             console.log(estado.historico);
 
-            switch (entrada) {
+
+
+            switch (numero) {
                 case '1':
                     estado.etapa = 'servico'; // primeiro estado 
                     await delay(2000);
